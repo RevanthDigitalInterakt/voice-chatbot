@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import axios from "axios";
 import dotenv from "dotenv";
+import { EventEmitter } from 'events';
+
 
 dotenv.config();
 
@@ -49,8 +51,8 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
+  res.json({ 
+    status: "ok", 
     message: "Bhashini proxy server is running",
     timestamp: new Date().toISOString(),
     apiKeyConfigured: !!process.env.BHASHINI_API_KEY
@@ -60,7 +62,7 @@ app.get("/health", (req, res) => {
 // Transcribe endpoint (matching Streamlit implementation)
 app.post("/api/transcribe", async (req, res) => {
   const startTime = Date.now();
-
+  
   try {
     const { audioBase64, language = "te" } = req.body;
 
@@ -136,7 +138,7 @@ app.post("/api/transcribe", async (req, res) => {
 
     // Extract transcribed text (matching Streamlit logic)
     let transcribedText = "";
-
+    
     if (response.data && response.data.pipelineResponse) {
       for (const task of response.data.pipelineResponse) {
         if (task.taskType === 'asr' && task.output) {
@@ -153,7 +155,7 @@ app.post("/api/transcribe", async (req, res) => {
 
     // Also try alternative response format
     if (!transcribedText) {
-      transcribedText =
+      transcribedText = 
         response.data?.pipelineResponse?.[0]?.output?.[0]?.source ||
         response.data?.pipelineResponse?.[0]?.outputData?.output?.[0]?.source ||
         "";
@@ -182,7 +184,7 @@ app.post("/api/transcribe", async (req, res) => {
 
   } catch (error) {
     const processingTime = Date.now() - startTime;
-
+    
     console.error(`[${new Date().toISOString()}] ❌ Transcription error:`, {
       message: error.message,
       status: error.response?.status,
@@ -218,258 +220,98 @@ app.post("/api/transcribe", async (req, res) => {
   }
 });
 
-
-// Add this to your server.js
-
-// Transliteration service ID mapping
-const getTransliterationServiceId = (sourceLang, targetLang) => {
-  // Bhashini transliteration service IDs
-  const serviceMap = {
-    'en-hi': 'ai4bharat/indicxlit--cpu-fsv2',
-    'en-te': 'ai4bharat/indicxlit--cpu-fsv2',
-    'en-ta': 'ai4bharat/indicxlit--cpu-fsv2',
-    'en-kn': 'ai4bharat/indicxlit--cpu-fsv2',
-    'en-ml': 'ai4bharat/indicxlit--cpu-fsv2',
-    'en-mr': 'ai4bharat/indicxlit--cpu-fsv2',
-    'en-gu': 'ai4bharat/indicxlit--cpu-fsv2',
-    'en-bn': 'ai4bharat/indicxlit--cpu-fsv2',
-    'en-or': 'ai4bharat/indicxlit--cpu-fsv2',
-    'en-pa': 'ai4bharat/indicxlit--cpu-fsv2',
-  };
-  
-  const key = `${sourceLang}-${targetLang}`;
-  return serviceMap[key] || 'ai4bharat/indicxlit--cpu-fsv2';
-};
-
-// Transliteration endpoint
-app.post("/api/transliteration", async (req, res) => {
+// Multi-language transcription endpoint
+app.post("/api/transcribe-multi", async (req, res) => {
   try {
-    const { text, sourceLang, targetLang='en' } = req.body;
+    const { audioBase64, languages = ["hi", "te", "ta", "kn", "en"] } = req.body;
 
-    // Validation
-    if (!text) {
-      return res.status(400).json({
-        error: "Missing text in request body",
-        success: false
+    if (!audioBase64) {
+      return res.status(400).json({ 
+        error: "Missing audioBase64",
+        success: false 
       });
     }
 
-    if (!process.env.BHASHINI_API_KEY) {
-      return res.status(500).json({
-        error: "BHASHINI_API_KEY not configured on server",
-        success: false
-      });
-    }
+    console.log(`[${new Date().toISOString()}] 🌐 Multi-language transcription request`);
+    console.log(`   Trying languages: ${languages.join(", ")}`);
 
-    console.log(`[${new Date().toISOString()}] 🔤 Transliteration request received`);
-    console.log(`   Text: "${text}"`);
-    console.log(`   Source: ${sourceLang} → Target: ${targetLang}`);
-
-    const serviceId = getTransliterationServiceId(sourceLang, targetLang);
-    console.log(`   Service ID: ${serviceId}`);
-
-    // Prepare payload
-    const payload = {
-      pipelineTasks: [
-        {
-          taskType: "transliteration",
-          config: {
-            language: {
-              sourceLanguage: sourceLang,
-              targetLanguage: targetLang
-            },
-            serviceId: serviceId,
-            isSentence: false,
-            numSuggestions: 1
-          }
-        }
-      ],
-      inputData: {
-        input: [
+    // Try each language until one succeeds
+    for (const lang of languages) {
+      try {
+        console.log(`   🔄 Trying language: ${lang}`);
+        
+        const serviceId = getServiceId(lang);
+        
+        const response = await axios.post(
+          process.env.BHASHINI_API_URL || "https://dhruva-api.bhashini.gov.in/services/inference/pipeline",
           {
-            source: text
+            pipelineTasks: [
+              {
+                taskType: "asr",
+                config: {
+                  language: { sourceLanguage: lang },
+                  serviceId: serviceId,
+                  audioFormat: "wav",
+                  samplingRate: 16000
+                }
+              }
+            ],
+            inputData: {
+              audio: [{ audioContent: audioBase64 }]
+            }
+          },
+          {
+            headers: {
+              'Accept': '*/*',
+              'Authorization': process.env.BHASHINI_API_KEY,
+              'Content-Type': 'application/json'
+            },
+            timeout: 15000
           }
-        ]
-      }
-    };
+        );
 
-    console.log(`   🚀 Sending to Bhashini API...`);
-
-    // Make request to Bhashini API
-    const response = await axios.post(
-      process.env.BHASHINI_API_URL || "https://dhruva-api.bhashini.gov.in/services/inference/pipeline",
-      payload,
-      {
-        headers: {
-          'Accept': '*/*',
-          'Authorization': process.env.BHASHINI_API_KEY,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
-
-    console.log(`   ✅ Response received from Bhashini`);
-
-    // Extract transliterated text
-    let transliteratedText = "";
-    
-    if (response.data && response.data.pipelineResponse) {
-      for (const task of response.data.pipelineResponse) {
-        if (task.taskType === 'transliteration' && task.output) {
-          for (const output of task.output) {
-            if (output.target) {
-              transliteratedText = output.target;
+        // Extract text
+        let text = "";
+        if (response.data?.pipelineResponse) {
+          for (const task of response.data.pipelineResponse) {
+            if (task.taskType === 'asr' && task.output) {
+              text = task.output[0]?.source || "";
               break;
             }
           }
         }
-        if (transliteratedText) break;
+
+        if (text && text.trim()) {
+          console.log(`   ✅ Successfully transcribed with language: ${lang}`);
+          console.log(`   📝 Result: "${text}"`);
+          return res.json({
+            text,
+            detectedLanguage: lang,
+            success: true
+          });
+        }
+      } catch (err) {
+        console.log(`   ❌ Failed with language ${lang}: ${err.message}`);
+        continue;
       }
     }
 
-    // Alternative response format
-    if (!transliteratedText) {
-      transliteratedText = 
-        response.data?.pipelineResponse?.[0]?.output?.[0]?.target || "";
-    }
-
-    if (!transliteratedText) {
-      console.log(`   ⚠️  No transliteration result`);
-      return res.status(200).json({
-        text: text, // Return original text if no transliteration
-        originalText: text,
-        message: "Could not transliterate text",
-        success: false
-      });
-    }
-
-    console.log(`   📝 Transliteration: "${text}" → "${transliteratedText}"`);
-
-    res.json({
-      text: transliteratedText,
-      originalText: text,
-      sourceLang: sourceLang,
-      targetLang: targetLang,
-      success: true
+    console.log(`   ⚠️  Could not transcribe in any language`);
+    res.status(200).json({
+      text: "",
+      message: "Could not transcribe audio in any supported language",
+      success: false
     });
 
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] ❌ Transliteration error:`, {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      code: error.code
-    });
-
-    const statusCode = error.response?.status || 500;
-    const errorMessage = error.response?.data?.message || error.message || "Transliteration failed";
-
-    res.status(statusCode).json({
-      error: errorMessage,
-      details: error.response?.data || error.message,
+    console.error("Multi-language transcription error:", error);
+    res.status(500).json({
+      error: "Transcription failed",
+      details: error.message,
       success: false
     });
   }
 });
-
-
-// Multi-language transcription endpoint
-// app.post("/api/transcribe-multi", async (req, res) => {
-//   try {
-//     const { audioBase64, languages = ["hi", "te", "ta", "kn", "en"] } = req.body;
-
-//     if (!audioBase64) {
-//       return res.status(400).json({
-//         error: "Missing audioBase64",
-//         success: false
-//       });
-//     }
-
-//     console.log(`[${new Date().toISOString()}] 🌐 Multi-language transcription request`);
-//     console.log(`   Trying languages: ${languages.join(", ")}`);
-
-//     // Try each language until one succeeds
-//     for (const lang of languages) {
-//       try {
-//         console.log(`   🔄 Trying language: ${lang}`);
-
-//         const serviceId = getServiceId(lang);
-
-//         const response = await axios.post(
-//           process.env.BHASHINI_API_URL || "https://dhruva-api.bhashini.gov.in/services/inference/pipeline",
-//           {
-//             pipelineTasks: [
-//               {
-//                 taskType: "asr",
-//                 config: {
-//                   language: { sourceLanguage: lang },
-//                   serviceId: serviceId,
-//                   audioFormat: "wav",
-//                   samplingRate: 16000
-//                 }
-//               }
-//             ],
-//             inputData: {
-//               audio: [{ audioContent: audioBase64 }]
-//             }
-//           },
-//           {
-//             headers: {
-//               'Accept': '*/*',
-//               'Authorization': process.env.BHASHINI_API_KEY,
-//               'Content-Type': 'application/json'
-//             },
-//             timeout: 15000
-//           }
-//         );
-
-//         // Extract text
-//         let text = "";
-//         if (response.data?.pipelineResponse) {
-//           for (const task of response.data.pipelineResponse) {
-//             if (task.taskType === 'asr' && task.output) {
-//               text = task.output[0]?.source || "";
-//               break;
-//             }
-//           }
-//         }
-
-//         if (text && text.trim()) {
-//           console.log(`   ✅ Successfully transcribed with language: ${lang}`);
-//           console.log(`   📝 Result: "${text}"`);
-//           return res.json({
-//             text,
-//             detectedLanguage: lang,
-//             success: true
-//           });
-//         }
-//       } catch (err) {
-//         console.log(`   ❌ Failed with language ${lang}: ${err.message}`);
-//         continue;
-//       }
-//     }
-
-//     console.log(`   ⚠️  Could not transcribe in any language`);
-//     res.status(200).json({
-//       text: "",
-//       message: "Could not transcribe audio in any supported language",
-//       success: false
-//     });
-
-//   } catch (error) {
-//     console.error("Multi-language transcription error:", error);
-//     res.status(500).json({
-//       error: "Transcription failed",
-//       details: error.message,
-//       success: false
-//     });
-//   }
-// });
-
-
-
-
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -481,6 +323,288 @@ app.use((err, req, res, next) => {
   });
 });
 
+
+
+
+// Add these imports at the top of server.js
+
+// Add these constants after other constants
+//tokens changed
+const SF_ORG_DOMAIN = process.env.SF_ORG_DOMAIN ;
+const SF_CLIENT_ID = process.env.SF_CLIENT_ID;
+const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET;
+const SF_AGENT_ID = process.env.SF_AGENT_ID  ;
+SF_API_HOST = process.env.SF_API_HOST;
+
+// Session storage
+const sessions = new Map();
+
+// Helper: Get Salesforce access token
+async function getSalesforceAccessToken() {
+  try {
+    const tokenUrl = `${SF_ORG_DOMAIN}/services/oauth2/token`;
+    
+    const params = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: SF_CLIENT_ID,
+      client_secret: SF_CLIENT_SECRET
+    });
+
+    const response = await axios.post(tokenUrl, params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    return response.data.access_token;
+  } catch (error) {
+    console.error('Failed to get Salesforce access token:', error.response?.data || error.message);
+    throw new Error('Authentication failed');
+  }
+}
+
+// Helper: Parse Server-Sent Events
+function parseSSE(text) {
+  const lines = text.split('\n');
+  const events = [];
+  let currentEvent = { data: '' };
+
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      currentEvent.data += line.slice(6);
+    } else if (line === '') {
+      if (currentEvent.data) {
+        try {
+          events.push(JSON.parse(currentEvent.data));
+        } catch (e) {
+          // Ignore parse errors
+        }
+        currentEvent = { data: '' };
+      }
+    }
+  }
+
+  return events;
+}
+
+// ==============================================================
+// SALESFORCE AGENTFORCE ENDPOINTS
+// ==============================================================
+
+// Start Agentforce session
+app.post("/api/salesforce/start-session", async (req, res) => {
+  try {
+    console.log(`[${new Date().toISOString()}] 🚀 Starting Agentforce session`);
+
+    // Get access token
+    const accessToken = await getSalesforceAccessToken();
+    console.log('✅ Got access token');
+
+    // Create session
+    const externalSessionKey = `session-${Date.now()}`;
+    const sessionUrl = `${SF_API_HOST}/einstein/ai-agent/v1/agents/${SF_AGENT_ID}/sessions`;
+
+    const sessionPayload = {
+      externalSessionKey: externalSessionKey,
+      instanceConfig: {
+        endpoint: SF_ORG_DOMAIN
+      },
+      tz: "America/Los_Angeles",
+      variables: [
+        {
+          name: "$Context.EndUserLanguage",
+          type: "Text",
+          value: "en_US"
+        }
+      ],
+      featureSupport: "Streaming",
+      streamingCapabilities: {
+        chunkTypes: ["Text"]
+      },
+      bypassUser: true
+    };
+
+    const sessionResponse = await axios.post(sessionUrl, sessionPayload, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      timeout: 30000
+    });
+
+    const sessionData = sessionResponse.data;
+    const sessionId = sessionData.sessionId;
+
+    console.log(`✅ Session created: ${sessionId}`);
+
+    // Store session info
+    sessions.set(sessionId, {
+      sessionId,
+      accessToken,
+      createdAt: Date.now()
+    });
+
+    // Extract initial greeting
+    let initialMessage = '';
+    if (sessionData.messages && sessionData.messages.length > 0) {
+      initialMessage = sessionData.messages[0].message || '';
+    }
+
+    res.json({
+      success: true,
+      sessionId: sessionId,
+      initialMessage: initialMessage
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to start Agentforce session:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.message || error.message || 'Failed to start session'
+    });
+  }
+});
+
+// Send message to Agentforce agent
+app.post("/api/salesforce/send-message", async (req, res) => {
+  try {
+    const { sessionId, message } = req.body;
+
+    if (!sessionId || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing sessionId or message'
+      });
+    }
+
+    console.log(`[${new Date().toISOString()}] 📤 Sending message to Agentforce`);
+    console.log(`   Session: ${sessionId}`);
+    console.log(`   Message: "${message}"`);
+
+    // Get session info
+    const sessionInfo = sessions.get(sessionId);
+    if (!sessionInfo) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found or expired'
+      });
+    }
+
+    // Send message with streaming
+    const messageUrl = `${SF_API_HOST}/einstein/ai-agent/v1/sessions/${sessionId}/messages/stream`;
+    
+    const messagePayload = {
+      message: {
+        sequenceId: Date.now(),
+        type: "Text",
+        text: message
+      },
+      variables: []
+    };
+
+    const response = await axios.post(messageUrl, messagePayload, {
+      headers: {
+        'Authorization': `Bearer ${sessionInfo.accessToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream'
+      },
+      timeout: 60000,
+      responseType: 'text'
+    });
+
+    // Parse SSE response
+    const events = parseSSE(response.data);
+    
+    // Extract the actual message
+    let agentMessage = '';
+    for (const event of events) {
+      const msg = event.message || {};
+      if (msg.type === 'Inform' && msg.message) {
+        agentMessage = msg.message;
+        break;
+      }
+    }
+
+    if (!agentMessage) {
+      agentMessage = 'I apologize, but I could not generate a response.';
+    }
+
+    console.log(`✅ Agent response: "${agentMessage}"`);
+
+    res.json({
+      success: true,
+      message: agentMessage
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to send message:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.message || error.message || 'Failed to send message'
+    });
+  }
+});
+
+// End Agentforce session
+app.post("/api/salesforce/end-session", async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing sessionId'
+      });
+    }
+
+    console.log(`[${new Date().toISOString()}] 👋 Ending session: ${sessionId}`);
+
+    const sessionInfo = sessions.get(sessionId);
+    if (sessionInfo) {
+      const endUrl = `${SF_API_HOST}/einstein/ai-agent/v1/sessions/${sessionId}`;
+      
+      try {
+        await axios.delete(endUrl, {
+          headers: {
+            'Authorization': `Bearer ${sessionInfo.accessToken}`,
+            'x-session-end-reason': 'UserRequest'
+          },
+          timeout: 10000
+        });
+      } catch (err) {
+        // Session might already be ended
+        console.log('⚠️ Session may already be ended');
+      }
+
+      sessions.delete(sessionId);
+    }
+
+    res.json({
+      success: true,
+      message: 'Session ended'
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to end session:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to end session'
+    });
+  }
+});
+
+// Clean up old sessions (run periodically)
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 30 * 60 * 1000; // 30 minutes
+
+  for (const [sessionId, info] of sessions.entries()) {
+    if (now - info.createdAt > maxAge) {
+      console.log(`🧹 Cleaning up old session: ${sessionId}`);
+      sessions.delete(sessionId);
+    }
+  }
+}, 5 * 60 * 1000); // Run every 5 minutes
+
 // Start server
 app.listen(PORT, () => {
   console.log(`\n${"=".repeat(60)}`);
@@ -491,19 +615,19 @@ app.listen(PORT, () => {
   console.log(`🎤 Transcribe: http://localhost:${PORT}/api/transcribe`);
   console.log(`🌐 Multi-language: http://localhost:${PORT}/api/transcribe-multi`);
   console.log(`${"=".repeat(60)}`);
-
+  
   if (!process.env.BHASHINI_API_KEY) {
     console.log(`⚠️  WARNING: BHASHINI_API_KEY not found!`);
     console.log(`   Please add it to your .env file`);
   } else {
     console.log(`✅ BHASHINI_API_KEY: Configured`);
   }
-
+  
   if (!process.env.BHASHINI_API_URL) {
     console.log(`ℹ️  Using default Bhashini API URL`);
   } else {
     console.log(`✅ BHASHINI_API_URL: ${process.env.BHASHINI_API_URL}`);
   }
-
+  
   console.log(`${"=".repeat(60)}\n`);
 });
