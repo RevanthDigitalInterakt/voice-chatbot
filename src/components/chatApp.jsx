@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { sendAudioToBhashini } from '../services/bhashiniService';
 import { convertToWav, blobToBase64, validateAudioBlob } from './utils/audioUtils';
 import salesforceAgent from '../services/salesforceAgentService';
+import { sendAudioToBhashiniALD } from '../services/ALD';
 
 const Mic = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -178,7 +179,9 @@ export default function ChatApp() {
           
           console.log('Converting to base64...');
           const base64Audio = await blobToBase64(wavBlob);
-          
+
+          const selectedLanguage=await sendAudioToBhashiniALD(base64Audio);
+          console.log('Detected Language:', selectedLanguage);
           console.log('Transcribing with Bhashini...');
           const transcribedText = await sendAudioToBhashini(base64Audio, selectedLanguage);
           console.log('Transcription:', transcribedText);

@@ -51,8 +51,8 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get("/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
+  res.json({
+    status: "ok",
     message: "Bhashini proxy server is running",
     timestamp: new Date().toISOString(),
     apiKeyConfigured: !!process.env.BHASHINI_API_KEY
@@ -62,7 +62,7 @@ app.get("/health", (req, res) => {
 // Transcribe endpoint (matching Streamlit implementation)
 app.post("/api/transcribe", async (req, res) => {
   const startTime = Date.now();
-  
+
   try {
     const { audioBase64, language = "te" } = req.body;
 
@@ -116,7 +116,7 @@ app.post("/api/transcribe", async (req, res) => {
     // Prepare headers (exactly like Streamlit)
     const headers = {
       'Accept': '*/*',
-      'User-Agent': 'Siara-Voice-Assistant',
+      'User-Agent': 'Voice-Assistant',
       'Authorization': process.env.BHASHINI_API_KEY,
       'Content-Type': 'application/json'
     };
@@ -138,7 +138,7 @@ app.post("/api/transcribe", async (req, res) => {
 
     // Extract transcribed text (matching Streamlit logic)
     let transcribedText = "";
-    
+
     if (response.data && response.data.pipelineResponse) {
       for (const task of response.data.pipelineResponse) {
         if (task.taskType === 'asr' && task.output) {
@@ -155,7 +155,7 @@ app.post("/api/transcribe", async (req, res) => {
 
     // Also try alternative response format
     if (!transcribedText) {
-      transcribedText = 
+      transcribedText =
         response.data?.pipelineResponse?.[0]?.output?.[0]?.source ||
         response.data?.pipelineResponse?.[0]?.outputData?.output?.[0]?.source ||
         "";
@@ -184,7 +184,7 @@ app.post("/api/transcribe", async (req, res) => {
 
   } catch (error) {
     const processingTime = Date.now() - startTime;
-    
+
     console.error(`[${new Date().toISOString()}] ❌ Transcription error:`, {
       message: error.message,
       status: error.response?.status,
@@ -226,9 +226,9 @@ app.post("/api/transcribe-multi", async (req, res) => {
     const { audioBase64, languages = ["hi", "te", "ta", "kn", "en"] } = req.body;
 
     if (!audioBase64) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Missing audioBase64",
-        success: false 
+        success: false
       });
     }
 
@@ -239,9 +239,9 @@ app.post("/api/transcribe-multi", async (req, res) => {
     for (const lang of languages) {
       try {
         console.log(`   🔄 Trying language: ${lang}`);
-        
+
         const serviceId = getServiceId(lang);
-        
+
         const response = await axios.post(
           process.env.BHASHINI_API_URL || "https://dhruva-api.bhashini.gov.in/services/inference/pipeline",
           {
@@ -330,10 +330,10 @@ app.use((err, req, res, next) => {
 
 // Add these constants after other constants
 //tokens changed
-const SF_ORG_DOMAIN = process.env.SF_ORG_DOMAIN ;
+const SF_ORG_DOMAIN = process.env.SF_ORG_DOMAIN;
 const SF_CLIENT_ID = process.env.SF_CLIENT_ID;
 const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET;
-const SF_AGENT_ID = process.env.SF_AGENT_ID  ;
+const SF_AGENT_ID = process.env.SF_AGENT_ID;
 const SF_API_HOST = process.env.SF_API_HOST;
 
 // Session storage
@@ -343,7 +343,7 @@ const sessions = new Map();
 async function getSalesforceAccessToken() {
   try {
     const tokenUrl = `${SF_ORG_DOMAIN}/services/oauth2/token`;
-    
+
     const params = new URLSearchParams({
       grant_type: 'client_credentials',
       client_id: SF_CLIENT_ID,
@@ -493,7 +493,7 @@ app.post("/api/salesforce/send-message", async (req, res) => {
 
     // Send message with streaming
     const messageUrl = `${SF_API_HOST}/einstein/ai-agent/v1/sessions/${sessionId}/messages/stream`;
-    
+
     const messagePayload = {
       message: {
         sequenceId: Date.now(),
@@ -515,7 +515,7 @@ app.post("/api/salesforce/send-message", async (req, res) => {
 
     // Parse SSE response
     const events = parseSSE(response.data);
-    
+
     // Extract the actual message
     let agentMessage = '';
     for (const event of events) {
@@ -530,7 +530,7 @@ app.post("/api/salesforce/send-message", async (req, res) => {
       agentMessage = 'I apologize, but I could not generate a response.';
     }
 
-   // console.log(`✅ Agent response: "${agentMessage}"`);
+    // console.log(`✅ Agent response: "${agentMessage}"`);
 
     res.json({
       success: true,
@@ -563,7 +563,7 @@ app.post("/api/salesforce/end-session", async (req, res) => {
     const sessionInfo = sessions.get(sessionId);
     if (sessionInfo) {
       const endUrl = `${SF_API_HOST}/einstein/ai-agent/v1/sessions/${sessionId}`;
-      
+
       try {
         await axios.delete(endUrl, {
           headers: {
@@ -607,6 +607,151 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // Run every 5 minutes
 
+
+app.post('/api/ald_transcribe', async (req, res) => {
+
+  const startTime = Date.now();
+
+  try {
+    const { audioBase64 } = req.body;
+    if (!audioBase64) {
+      return res.status(400).json({
+        error: "Missing audioBase64 in request body",
+        success: false
+      });
+    }
+    if (!process.env.BHASHINI_API_KEY) {
+      return res.status(500).json({
+        error: "BHASHINI_API_KEY not configured on server",
+        success: false
+      });
+    }
+    console.log(`[${new Date().toISOString()}] 🎤 ALD Transcription request received`);
+    console.log(`   Audio size: ${audioBase64.length} characters`);
+    console.log(`   Audio size (bytes): ~${Math.round(audioBase64.length * 0.75)}`);
+    console.log(`   🚀 Sending to Bhashini ALD API...`);
+    
+    const payload = {
+      "pipelineTasks": [
+        {
+          "taskType": "audio-lang-detection",
+          "config": {
+            "serviceId": "bhashini/iitmandi/audio-lang-detection/gpu"
+          }
+        }
+      ],
+      "inputData": {
+        "audio": [
+          {
+            "audioContent": audioBase64
+          }
+        ]
+      }
+    };
+
+    const headers = {
+      'Accept': '*/*',
+      'User-Agent': 'Voice-Assistant',
+      'Authorization': process.env.BHASHINI_API_KEY,
+      'Content-Type': 'application/json'
+    };
+    
+    console.log(`   🚀 Sending to Bhashini API...`);
+    const response = await axios.post(
+      process.env.BHASHINI_API_URL || "https://dhruva-api.bhashini.gov.in/services/inference/pipeline",
+      payload,
+      {
+        headers: headers,
+        timeout: 30000
+      }
+    );
+
+    const processingTime = Date.now() - startTime;
+    console.log(`   ⏱️  Processing time: ${processingTime}ms`);
+    
+    let detectedLanguage = "";
+    let languageScore = 0;
+    let scriptCode = "";
+    
+    // Parse the new response structure
+    if (response.data && response.data.pipelineResponse) {
+      for (const task of response.data.pipelineResponse) {
+        if (task.taskType === 'audio-lang-detection' && task.output) {
+          for (const output of task.output) {
+            // Check for langPrediction array in the new response format
+            if (output.langPrediction && output.langPrediction.length > 0) {
+              // Get the top prediction (highest score)
+              const topPrediction = output.langPrediction[0];
+              detectedLanguage = topPrediction.langCode;
+              languageScore = topPrediction.langScore;
+              scriptCode = topPrediction.scriptCode;
+              break;
+            }
+          }
+        }
+        if (detectedLanguage) break;
+      }
+    }
+    
+    if (!detectedLanguage) {
+      console.log(`   ⚠️  Could not detect language`);
+      return res.status(200).json({
+        text: "",
+        message: "Could not detect language",
+        success: false,
+        processingTime: processingTime
+      });
+    }
+    
+    console.log(`   ✅ Language detected: ${detectedLanguage} (${scriptCode}) with confidence ${(languageScore * 100).toFixed(2)}%`);
+    
+    res.json({
+      text: detectedLanguage,
+      langCode: detectedLanguage,
+      scriptCode: scriptCode,
+      confidence: languageScore,
+      success: true,
+      processingTime: processingTime
+    });
+    
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    console.error(`[${new Date().toISOString()}] ❌ ALD Transcription error:`, {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      code: error.code,
+      processingTime: processingTime
+    });
+    
+    let statusCode = 500;
+    let errorMessage = "Transcription failed";
+    let errorDetails = error.message;
+    
+    if (error.code === 'ECONNABORTED') {
+      statusCode = 504;
+      errorMessage = "Request timeout - Bhashini API took too long to respond";
+    } else if (error.code === 'ECONNREFUSED') {
+      statusCode = 503;
+      errorMessage = "Cannot connect to Bhashini API";
+    } else if (error.response) {
+      statusCode = error.response.status;
+      errorMessage = error.response.data?.message || error.response.statusText;
+      errorDetails = error.response.data;
+    }
+    
+    res.status(statusCode).json({
+      error: errorMessage,
+      details: errorDetails,
+      success: false,
+      processingTime: processingTime
+    });
+  }
+});
+
+
+
 // Start server
 app.listen(PORT, () => {
   console.log(`\n${"=".repeat(60)}`);
@@ -617,19 +762,31 @@ app.listen(PORT, () => {
   console.log(`🎤 Transcribe: http://localhost:${PORT}/api/transcribe`);
   console.log(`🌐 Multi-language: http://localhost:${PORT}/api/transcribe-multi`);
   console.log(`${"=".repeat(60)}`);
-  
+
   if (!process.env.BHASHINI_API_KEY) {
     console.log(`⚠️  WARNING: BHASHINI_API_KEY not found!`);
     console.log(`   Please add it to your .env file`);
   } else {
     console.log(`✅ BHASHINI_API_KEY: Configured`);
   }
-  
+
   if (!process.env.BHASHINI_API_URL) {
     console.log(`ℹ️  Using default Bhashini API URL`);
   } else {
     console.log(`✅ BHASHINI_API_URL: ${process.env.BHASHINI_API_URL}`);
   }
-  
+
   console.log(`${"=".repeat(60)}\n`);
 });
+
+
+
+
+// ==============================================================
+  
+
+
+
+// ==============================================================
+// END OF FILE
+// ==============================================================
