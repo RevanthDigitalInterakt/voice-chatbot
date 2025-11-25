@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import axios from "axios";
 import dotenv from "dotenv";
+import { EventEmitter } from 'events';
+
 
 dotenv.config();
 
@@ -320,6 +322,288 @@ app.use((err, req, res, next) => {
     success: false
   });
 });
+
+
+
+
+// Add these imports at the top of server.js
+
+// Add these constants after other constants
+//tokens changed
+const SF_ORG_DOMAIN = process.env.SF_ORG_DOMAIN ;
+const SF_CLIENT_ID = process.env.SF_CLIENT_ID;
+const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET;
+const SF_AGENT_ID = process.env.SF_AGENT_ID  ;
+SF_API_HOST = process.env.SF_API_HOST;
+
+// Session storage
+const sessions = new Map();
+
+// Helper: Get Salesforce access token
+async function getSalesforceAccessToken() {
+  try {
+    const tokenUrl = `${SF_ORG_DOMAIN}/services/oauth2/token`;
+    
+    const params = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: SF_CLIENT_ID,
+      client_secret: SF_CLIENT_SECRET
+    });
+
+    const response = await axios.post(tokenUrl, params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    return response.data.access_token;
+  } catch (error) {
+    console.error('Failed to get Salesforce access token:', error.response?.data || error.message);
+    throw new Error('Authentication failed');
+  }
+}
+
+// Helper: Parse Server-Sent Events
+function parseSSE(text) {
+  const lines = text.split('\n');
+  const events = [];
+  let currentEvent = { data: '' };
+
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      currentEvent.data += line.slice(6);
+    } else if (line === '') {
+      if (currentEvent.data) {
+        try {
+          events.push(JSON.parse(currentEvent.data));
+        } catch (e) {
+          // Ignore parse errors
+        }
+        currentEvent = { data: '' };
+      }
+    }
+  }
+
+  return events;
+}
+
+// ==============================================================
+// SALESFORCE AGENTFORCE ENDPOINTS
+// ==============================================================
+
+// Start Agentforce session
+app.post("/api/salesforce/start-session", async (req, res) => {
+  try {
+    console.log(`[${new Date().toISOString()}] 🚀 Starting Agentforce session`);
+
+    // Get access token
+    const accessToken = await getSalesforceAccessToken();
+    console.log('✅ Got access token');
+
+    // Create session
+    const externalSessionKey = `session-${Date.now()}`;
+    const sessionUrl = `${SF_API_HOST}/einstein/ai-agent/v1/agents/${SF_AGENT_ID}/sessions`;
+
+    const sessionPayload = {
+      externalSessionKey: externalSessionKey,
+      instanceConfig: {
+        endpoint: SF_ORG_DOMAIN
+      },
+      tz: "America/Los_Angeles",
+      variables: [
+        {
+          name: "$Context.EndUserLanguage",
+          type: "Text",
+          value: "en_US"
+        }
+      ],
+      featureSupport: "Streaming",
+      streamingCapabilities: {
+        chunkTypes: ["Text"]
+      },
+      bypassUser: true
+    };
+
+    const sessionResponse = await axios.post(sessionUrl, sessionPayload, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      timeout: 30000
+    });
+
+    const sessionData = sessionResponse.data;
+    const sessionId = sessionData.sessionId;
+
+    console.log(`✅ Session created: ${sessionId}`);
+
+    // Store session info
+    sessions.set(sessionId, {
+      sessionId,
+      accessToken,
+      createdAt: Date.now()
+    });
+
+    // Extract initial greeting
+    let initialMessage = '';
+    if (sessionData.messages && sessionData.messages.length > 0) {
+      initialMessage = sessionData.messages[0].message || '';
+    }
+
+    res.json({
+      success: true,
+      sessionId: sessionId,
+      initialMessage: initialMessage
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to start Agentforce session:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.message || error.message || 'Failed to start session'
+    });
+  }
+});
+
+// Send message to Agentforce agent
+app.post("/api/salesforce/send-message", async (req, res) => {
+  try {
+    const { sessionId, message } = req.body;
+
+    if (!sessionId || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing sessionId or message'
+      });
+    }
+
+    console.log(`[${new Date().toISOString()}] 📤 Sending message to Agentforce`);
+    console.log(`   Session: ${sessionId}`);
+    console.log(`   Message: "${message}"`);
+
+    // Get session info
+    const sessionInfo = sessions.get(sessionId);
+    if (!sessionInfo) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found or expired'
+      });
+    }
+
+    // Send message with streaming
+    const messageUrl = `${SF_API_HOST}/einstein/ai-agent/v1/sessions/${sessionId}/messages/stream`;
+    
+    const messagePayload = {
+      message: {
+        sequenceId: Date.now(),
+        type: "Text",
+        text: message
+      },
+      variables: []
+    };
+
+    const response = await axios.post(messageUrl, messagePayload, {
+      headers: {
+        'Authorization': `Bearer ${sessionInfo.accessToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream'
+      },
+      timeout: 60000,
+      responseType: 'text'
+    });
+
+    // Parse SSE response
+    const events = parseSSE(response.data);
+    
+    // Extract the actual message
+    let agentMessage = '';
+    for (const event of events) {
+      const msg = event.message || {};
+      if (msg.type === 'Inform' && msg.message) {
+        agentMessage = msg.message;
+        break;
+      }
+    }
+
+    if (!agentMessage) {
+      agentMessage = 'I apologize, but I could not generate a response.';
+    }
+
+    console.log(`✅ Agent response: "${agentMessage}"`);
+
+    res.json({
+      success: true,
+      message: agentMessage
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to send message:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.message || error.message || 'Failed to send message'
+    });
+  }
+});
+
+// End Agentforce session
+app.post("/api/salesforce/end-session", async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing sessionId'
+      });
+    }
+
+    console.log(`[${new Date().toISOString()}] 👋 Ending session: ${sessionId}`);
+
+    const sessionInfo = sessions.get(sessionId);
+    if (sessionInfo) {
+      const endUrl = `${SF_API_HOST}/einstein/ai-agent/v1/sessions/${sessionId}`;
+      
+      try {
+        await axios.delete(endUrl, {
+          headers: {
+            'Authorization': `Bearer ${sessionInfo.accessToken}`,
+            'x-session-end-reason': 'UserRequest'
+          },
+          timeout: 10000
+        });
+      } catch (err) {
+        // Session might already be ended
+        console.log('⚠️ Session may already be ended');
+      }
+
+      sessions.delete(sessionId);
+    }
+
+    res.json({
+      success: true,
+      message: 'Session ended'
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to end session:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to end session'
+    });
+  }
+});
+
+// Clean up old sessions (run periodically)
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 30 * 60 * 1000; // 30 minutes
+
+  for (const [sessionId, info] of sessions.entries()) {
+    if (now - info.createdAt > maxAge) {
+      console.log(`🧹 Cleaning up old session: ${sessionId}`);
+      sessions.delete(sessionId);
+    }
+  }
+}, 5 * 60 * 1000); // Run every 5 minutes
 
 // Start server
 app.listen(PORT, () => {
