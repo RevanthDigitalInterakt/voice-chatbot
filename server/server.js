@@ -1,4 +1,4 @@
-import express from "express";
+import express, { response } from "express";
 import cors from "cors";
 import axios from "axios";
 import dotenv from "dotenv";
@@ -334,7 +334,7 @@ const SF_ORG_DOMAIN = process.env.SF_ORG_DOMAIN ;
 const SF_CLIENT_ID = process.env.SF_CLIENT_ID;
 const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET;
 const SF_AGENT_ID = process.env.SF_AGENT_ID  ;
-SF_API_HOST = process.env.SF_API_HOST;
+const SF_API_HOST = process.env.SF_API_HOST;
 
 // Session storage
 const sessions = new Map();
@@ -464,6 +464,8 @@ app.post("/api/salesforce/start-session", async (req, res) => {
   }
 });
 
+
+
 // Send message to Agentforce agent
 app.post("/api/salesforce/send-message", async (req, res) => {
   try {
@@ -528,7 +530,7 @@ app.post("/api/salesforce/send-message", async (req, res) => {
       agentMessage = 'I apologize, but I could not generate a response.';
     }
 
-    console.log(`✅ Agent response: "${agentMessage}"`);
+   // console.log(`✅ Agent response: "${agentMessage}"`);
 
     res.json({
       success: true,
@@ -556,7 +558,7 @@ app.post("/api/salesforce/end-session", async (req, res) => {
       });
     }
 
-    console.log(`[${new Date().toISOString()}] 👋 Ending session: ${sessionId}`);
+    //console.log(`[${new Date().toISOString()}] 👋 Ending session: ${sessionId}`);
 
     const sessionInfo = sessions.get(sessionId);
     if (sessionInfo) {

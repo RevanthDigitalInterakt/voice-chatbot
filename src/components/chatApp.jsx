@@ -344,7 +344,7 @@ export default function ChatApp() {
           </div>
           
           {/* Language selector */}
-          <div className="flex gap-2">
+          {/* <div className="flex gap-2">
             <select 
               value={selectedLanguage} 
               onChange={(e) => setSelectedLanguage(e.target.value)}
@@ -361,7 +361,7 @@ export default function ChatApp() {
               <option value="gu">ગુજરાતી</option>
               <option value="bn">বাংলা</option>
             </select>
-          </div>
+          </div> */}
         </div>
       </div>
 

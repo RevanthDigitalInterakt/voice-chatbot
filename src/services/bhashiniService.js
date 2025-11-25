@@ -2,8 +2,14 @@ import axios from "axios";
 
 const PROXY_URL = import.meta.env.VITE_PROXY_URL || 'http://localhost:3000';
 
-export const sendAudioToBhashini = async (audioBase64, language = 'te') => {
+export const sendAudioToBhashini = async (audioBase64, language) => {
   try {
+
+    if (!language) {
+      language = 'en'; // default to Telugu
+    }
+
+
     console.log('🎤 Sending to proxy server...');
     console.log('Proxy URL:', PROXY_URL);
     console.log('Language:', language);
