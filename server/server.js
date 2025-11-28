@@ -226,101 +226,7 @@ app.post("/api/transcribe", async (req, res) => {
   }
 });
 
-// Multi-language transcription endpoint
-app.post("/api/transcribe-multi", async (req, res) => {
-  try {
-    const { audioBase64, languages = ["hi", "te", "ta", "kn", "en"] } =
-      req.body;
 
-    if (!audioBase64) {
-      return res.status(400).json({
-        error: "Missing audioBase64",
-        success: false,
-      });
-    }
-
-    console.log(
-      `[${new Date().toISOString()}] 🌐 Multi-language transcription request`
-    );
-    console.log(`   Trying languages: ${languages.join(", ")}`);
-
-    // Try each language until one succeeds
-    for (const lang of languages) {
-      try {
-        console.log(`   🔄 Trying language: ${lang}`);
-
-        const serviceId = getServiceId(lang);
-
-        const response = await axios.post(
-          process.env.BHASHINI_API_URL ||
-            "https://dhruva-api.bhashini.gov.in/services/inference/pipeline",
-          {
-            pipelineTasks: [
-              {
-                taskType: "asr",
-                config: {
-                  language: { sourceLanguage: lang },
-                  serviceId: serviceId,
-                  audioFormat: "wav",
-                  samplingRate: 16000,
-                },
-              },
-            ],
-            inputData: {
-              audio: [{ audioContent: audioBase64 }],
-            },
-          },
-          {
-            headers: {
-              Accept: "*/*",
-              Authorization: process.env.BHASHINI_API_KEY,
-              "Content-Type": "application/json",
-            },
-            timeout: 15000,
-          }
-        );
-
-        // Extract text
-        let text = "";
-        if (response.data?.pipelineResponse) {
-          for (const task of response.data.pipelineResponse) {
-            if (task.taskType === "asr" && task.output) {
-              text = task.output[0]?.source || "";
-              break;
-            }
-          }
-        }
-
-        if (text && text.trim()) {
-          console.log(`   ✅ Successfully transcribed with language: ${lang}`);
-          console.log(`   📝 Result: "${text}"`);
-          return res.json({
-            text,
-            detectedLanguage: lang,
-            success: true,
-          });
-        }
-      } catch (err) {
-        console.log(`   ❌ Failed with language ${lang}: ${err.message}`);
-        continue;
-      }
-    }
-
-    console.log(`   ⚠️  Could not transcribe in any language`);
-    res.status(200).json({
-      text: "",
-      message: "Could not transcribe audio in any supported language",
-      success: false,
-    });
-  } catch (error) {
-    console.error("Multi-language transcription error:", error);
-    res.status(500).json({
-      error: "Transcription failed",
-      details: error.message,
-      success: false,
-    });
-  }
-});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -816,6 +722,29 @@ app.post("/api/bhashini-pipeline", async (req, res) => {
       });
     }
 
+    // Improved English detection: Check if transcribed text is primarily English
+    // This helps when ALD misdetects English as an Indian language
+    const isLikelyEnglish = (text) => {
+      // Check if text contains mostly Latin characters (English alphabet)
+      const latinChars = text.match(/[a-zA-Z]/g);
+      const totalChars = text.replace(/\s/g, '').length;
+
+      if (latinChars && totalChars > 0) {
+        const latinRatio = latinChars.length / totalChars;
+        // If more than 70% Latin characters, it's likely English
+        return latinRatio > 0.7;
+      }
+      return false;
+    };
+
+    // Override language detection if text appears to be English
+    if (detectedLanguage !== 'en' && isLikelyEnglish(originalText)) {
+      console.log(`   🔄 Overriding detected language to English based on text analysis`);
+      console.log(`   📝 Text contains primarily Latin characters`);
+      detectedLanguage = 'en';
+      translatedText = originalText; // No translation needed
+    }
+
     console.log(`  ✅ Pipeline completed successfully`);
 
     res.json({
@@ -900,36 +829,67 @@ app.post("/api/tts", async (req, res) => {
     console.log(`   Gender: ${gender}`);
     console.log(`   Text: "${text.substring(0, 100)}${text.length > 100 ? '...' : ''}"`);
 
-    const serviceId = 'ai4bharat/indic-tts-coqui-indo_aryan-gpu--t4';
-    const speaker = 'female';
+    // Get appropriate TTS service ID based on language
+    const getTTSServiceId = (lang) => {
+      // Dravidian languages (Telugu, Tamil, Kannada, Malayalam)
+      if (['te', 'ta', 'kn', 'ml'].includes(lang)) {
+        return 'Bhashini/IITM/TTS';
+      }
+      // Indo-Aryan languages (Hindi, Marathi, Gujarati, Bengali, Punjabi, Odia)
+      if (['hi', 'mr', 'gu', 'bn', 'pa', 'or'].includes(lang)) {
+        return 'Bhashini/IITM/TTS';
+      }
+      // English
+      if (lang === 'en') {
+        return 'Bhashini/IITM/TTS';
+      }
+      // Default to Indo-Aryan
+      return 'Bhashini/IITM/TTS';
+    };
+
+    const serviceId = getTTSServiceId(language);
 
     console.log(`   Service ID: ${serviceId}`);
-    console.log(`   Speaker: ${speaker}`);
+    console.log(`   Gender: ${gender}`);
 
-    // Prepare TTS request payload
-    const payload = {
-      pipelineTasks: [
-        {
-          taskType: "tts",
-          config: {
-            language: {
-              sourceLanguage: language
-            },
-            serviceId: serviceId,
-            gender: gender,
-            samplingRate: 8000
-          }
+    // Prepare TTS request payload with translation pipeline
+    // If target language is not English, add translation task
+    const pipelineTasks = [];
+
+    if (language !== 'en') {
+      // Add translation task (English to target language)
+      pipelineTasks.push({
+        taskType: "translation",
+        config: {
+          language: {
+            sourceLanguage: "en",
+            targetLanguage: language
+          },
+          serviceId: "ai4bharat/indictrans-v2-all-gpu--t4"
         }
-      ],
+      });
+      console.log(`   🌍 Adding translation: en → ${language}`);
+    }
+
+    // Add TTS task
+    pipelineTasks.push({
+      taskType: "tts",
+      config: {
+        language: {
+          sourceLanguage: language
+        },
+        serviceId: serviceId,
+        gender: gender,
+        samplingRate: 8000
+      }
+    });
+
+    const payload = {
+      pipelineTasks: pipelineTasks,
       inputData: {
         input: [
           {
             source: text
-          }
-        ],
-        audio: [
-          {
-            audioContent: null
           }
         ]
       }
