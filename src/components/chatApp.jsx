@@ -27,40 +27,35 @@ const VolumeX = ({ className }) => (
   </svg>
 );
 
-const Sparkles = ({ className }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
-    <path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/>
-  </svg>
-);
-
 const AlertCircle = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>
   </svg>
 );
 
-function MessageBubble({ message, sender, isNew, metadata, onReplay, isPlaying }) {
+function MessageBubble({ message, sender, isNew, metadata, onReplay, isPlaying, wasVoiceInput }) {
   return (
-    <div className={`flex ${sender === 'user' ? 'justify-end' : 'justify-start'} mb-5 ${isNew ? 'animate-slide-up' : ''}`}>
-      <div className={`flex items-end gap-3 max-w-[80%] sm:max-w-[75%] ${sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+    <div className={`flex ${sender === 'user' ? 'justify-end' : 'justify-start'} mb-6 ${isNew ? 'animate-slide-up' : ''} w-full px-2`}>
+      <div className={`flex items-end gap-3 ${sender === 'user' ? 'max-w-[85%] sm:max-w-[78%]' : 'max-w-full'} ${sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
         {sender === 'bot' && (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 flex items-center justify-center text-white flex-shrink-0 shadow-lg ring-2 ring-blue-400/20">
-            <Sparkles className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center text-white flex-shrink-0 shadow-md ring-1 ring-blue-200">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
           </div>
         )}
         <div className="flex flex-col gap-2 flex-1">
-          <div className={`group relative px-4 py-3 sm:px-5 sm:py-3.5 ${
+          <div className={`group relative px-5 py-3 sm:px-5 sm:py-3.5 ${
             sender === 'user'
-              ? 'bg-gradient-to-br from-indigo-600 to-purple-600 text-white rounded-2xl rounded-br-md shadow-lg hover:shadow-xl transition-shadow'
-              : 'bg-white text-gray-800 rounded-2xl rounded-bl-md shadow-md hover:shadow-lg transition-shadow border border-gray-100'
+              ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-3xl rounded-br-sm shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-[1.02] active:scale-95'
+              : 'bg-gray-100 text-gray-900 rounded-3xl rounded-bl-sm shadow-sm hover:shadow-md transition-all duration-200 border border-gray-200'
           }`}>
-            <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{message}</p>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words font-medium">{message}</p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
             {metadata && (
-              <div className="flex-1 min-w-0 px-3 py-1.5 bg-white/90 backdrop-blur-sm rounded-lg text-xs text-gray-600 flex items-center gap-2 shadow-sm border border-gray-100">
+              <div className="flex-1 min-w-0 px-3 py-1.5 bg-gray-50 rounded-lg text-xs text-gray-600 flex items-center gap-2 shadow-sm border border-gray-200">
                 <span className="font-medium text-gray-700">{metadata.languageName}</span>
                 {metadata.confidence && (
                   <span className="text-gray-500">
@@ -75,27 +70,21 @@ function MessageBubble({ message, sender, isNew, metadata, onReplay, isPlaying }
               </div>
             )}
 
-            {sender === 'bot' && onReplay && (
+            {sender === 'bot' && onReplay && wasVoiceInput && (
               <button
                 onClick={onReplay}
                 disabled={isPlaying}
-                className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium transition-all hover:scale-105 active:scale-95 ${
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95 ${
                   isPlaying
-                    ? 'bg-blue-500 text-white shadow-md'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 shadow-sm border border-gray-200'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-800 shadow-sm border border-gray-200'
                 } disabled:opacity-50 disabled:hover:scale-100`}
                 title="Replay audio"
               >
                 {isPlaying ? (
-                  <>
-                    <Volume className="w-3.5 h-3.5 animate-pulse" />
-                    <span>Playing</span>
-                  </>
+                  <Volume className="w-4 h-4 animate-pulse" />
                 ) : (
-                  <>
-                    <Volume className="w-3.5 h-3.5" />
-                    <span>Replay</span>
-                  </>
+                  <Volume className="w-4 h-4" />
                 )}
               </button>
             )}
@@ -121,6 +110,12 @@ export default function ChatApp() {
   const [playingMessageId, setPlayingMessageId] = useState(null);
   const [detectedUserLanguage, setDetectedUserLanguage] = useState('en');
   const [userUsedVoice, setUserUsedVoice] = useState(false);
+  const [showQuickReplies, setShowQuickReplies] = useState(true);
+
+  const quickReplies = [
+    { label: 'Raise a Case', icon: '📅' },
+    { label: 'Info', icon: '📋' }
+  ];
 
   const timerRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -414,6 +409,7 @@ export default function ChatApp() {
       return;
     }
 
+    setShowQuickReplies(false);
     const userMessage = {
       id: Date.now(),
       text,
@@ -433,7 +429,8 @@ export default function ChatApp() {
         id: Date.now() + 1,
         text: agentResponse,
         sender: 'bot',
-        isNew: true
+        isNew: true,
+        wasVoiceInput: isVoiceInput
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -465,56 +462,108 @@ export default function ChatApp() {
   };
 
   return (
-    <div className="min-h-screen h-full w-full fixed inset-0 bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 flex flex-col overflow-hidden">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl animate-float" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl animate-float-delayed" />
+    <div className="min-h-screen h-full w-full fixed inset-0 bg-white flex overflow-hidden">
+      {/* LEFT SIDEBAR - Digital Interakt Branding */}
+      <div className="hidden lg:flex lg:w-[35%] bg-gradient-to-br from-blue-600 via-blue-700 to-blue-900 flex-col items-center justify-center relative overflow-hidden">
+        {/* Animated background elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-20 left-20 w-64 h-64 bg-white/10 rounded-full blur-3xl animate-float" />
+          <div className="absolute bottom-20 right-20 w-72 h-72 bg-white/5 rounded-full blur-3xl animate-float-delayed" />
+          <div className="absolute -top-40 -left-40 w-80 h-80 bg-blue-400/10 rounded-full blur-3xl animate-pulse" style={{animationDuration: '4s'}} />
+        </div>
+
+        {/* Company Branding Content */}
+        <div className="relative z-10 text-center px-8 space-y-6 flex flex-col items-center justify-center w-full h-full">
+          {/* Company Logo with Animated Rings */}
+          <div className="relative w-24 h-24">
+            {/* Rotating rings */}
+            <div className="absolute inset-0 border-2 border-white/20 rounded-full animate-spin" style={{animationDuration: '20s'}} />
+            <div className="absolute inset-2 border-2 border-white/30 rounded-full animate-spin" style={{animationDuration: '25s', animationDirection: 'reverse'}} />
+            <div className="absolute inset-4 border-2 border-white/40 rounded-full animate-pulse" />
+
+            {/* Center logo */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full bg-white shadow-2xl flex items-center justify-center border-3 border-white/50 overflow-hidden">
+                <img src="/logo.webp" alt="Digital Interakt Logo" className="w-12 h-12 object-contain" />
+              </div>
+            </div>
+          </div>
+
+          {/* Company Name */}
+          <div className="space-y-1">
+            <h2 className="text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight animate-fade-in">
+              Digital
+              <br />
+              Interakt
+            </h2>
+            <p className="text-white/70 text-xs font-light tracking-wide">Innovation at Scale</p>
+          </div>
+
+          {/* Features/Info - Centered layout */}
+          {/* <div className="space-y-2.5 flex flex-col items-center">
+            <div className="flex items-center justify-center gap-2 text-white/90">
+              <div className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
+                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <span className="text-xs font-medium">Enterprise Solutions</span>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-white/90">
+              <div className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
+                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <span className="text-xs font-medium">AI-Powered Voice</span>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-white/90">
+              <div className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center flex-shrink-0">
+                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <span className="text-xs font-medium">Multi-Language Support</span>
+            </div>
+          </div> */}
+
+          {/* Status Badge - Bottom */}
+          <div className="pt-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm hover:bg-white/15 transition-colors">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-white text-xs font-medium">Powered by Salesforce</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <header className="relative z-10 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30 ring-2 ring-blue-100">
-                <Sparkles className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1">
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Salesforce AI Agent</h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`w-2 h-2 ${sessionStarted ? 'bg-emerald-500' : 'bg-amber-500'} rounded-full ${sessionStarted ? 'animate-pulse-slow' : 'animate-pulse'}`} />
-                  <span className="text-gray-600 text-xs sm:text-sm font-medium">
-                    {isInitializing ? 'Connecting...' : sessionStarted ? `Online • ${detectedUserLanguage.toUpperCase()}` : 'Offline'}
-                  </span>
+      {/* RIGHT SIDE - Chatbot */}
+      <div className="w-full lg:w-[65%] flex flex-col overflow-hidden bg-white">
+        <header className="relative z-10 bg-white border-b border-gray-200 shadow-sm">
+          <div className="w-full px-4 sm:px-6 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center shadow-md ring-1 ring-blue-200">
+                  <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">AI Assistant</h1>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={`w-2 h-2 ${sessionStarted ? 'bg-green-500' : 'bg-amber-500'} rounded-full ${sessionStarted ? 'animate-pulse-slow' : 'animate-pulse'}`} />
+                    <span className="text-gray-600 text-xs sm:text-sm font-medium">
+                      {isInitializing ? 'Connecting...' : sessionStarted ? `Online • ${detectedUserLanguage.toUpperCase()}` : 'Offline'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-
-            <button
-              onClick={() => {
-                setTtsEnabled(!ttsEnabled);
-                if (currentAudioRef.current) {
-                  currentAudioRef.current.pause();
-                  currentAudioRef.current = null;
-                }
-                setIsSpeaking(false);
-                setPlayingMessageId(null);
-              }}
-              className={`px-3 sm:px-4 py-2 rounded-xl flex items-center gap-2 text-xs sm:text-sm font-medium transition-all hover:scale-105 active:scale-95 ${
-                ttsEnabled
-                  ? 'bg-blue-600 text-white shadow-md hover:bg-blue-700'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
-              }`}
-              title={ttsEnabled ? 'Disable voice responses' : 'Enable voice responses'}
-            >
-              {ttsEnabled ? <Volume className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-              <span className="hidden sm:inline">{ttsEnabled ? 'Voice On' : 'Voice Off'}</span>
-            </button>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="relative z-10 flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-1">
+        <main className="relative z-10 flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8 space-y-4">
           {isInitializing ? (
             <div className="flex justify-center items-center h-full min-h-[60vh]">
               <div className="text-center">
@@ -528,26 +577,48 @@ export default function ChatApp() {
             </div>
           ) : (
             <>
-              {messages.map(msg => (
-                <MessageBubble
-                  key={msg.id}
-                  message={msg.text}
-                  sender={msg.sender}
-                  isNew={msg.isNew}
-                  metadata={msg.metadata}
-                  onReplay={msg.sender === 'bot' ? () => replayMessage(msg.text, msg.id) : null}
-                  isPlaying={playingMessageId === msg.id}
-                />
+              {messages.map((msg, index) => (
+                <div key={msg.id}>
+                  <MessageBubble
+                    message={msg.text}
+                    sender={msg.sender}
+                    isNew={msg.isNew}
+                    metadata={msg.metadata}
+                    onReplay={msg.sender === 'bot' ? () => replayMessage(msg.text, msg.id) : null}
+                    isPlaying={playingMessageId === msg.id}
+                    wasVoiceInput={msg.wasVoiceInput}
+                  />
+                  {msg.sender === 'bot' && index === 0 && showQuickReplies && (
+                    <div className="flex justify-start mb-8 mt-2 animate-slide-up">
+                      <div className="flex flex-col gap-3 w-full max-w-md">
+                        <p className="text-xs text-gray-600 font-semibold px-4 uppercase tracking-wide">Quick replies:</p>
+                        <div className="flex flex-wrap gap-3 px-4">
+                          {quickReplies.map((reply, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => sendMessage(reply.label)}
+                              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 text-blue-700 text-sm font-semibold border border-blue-200 transition-all hover:shadow-md hover:scale-105 active:scale-95 shadow-sm"
+                            >
+                              {reply.icon} {reply.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ))}
 
               {isLoading && (
-                <div className="flex justify-start mb-5 animate-slide-up">
+                <div className="flex justify-start mb-7 animate-slide-up">
                   <div className="flex items-end gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-lg ring-2 ring-blue-400/20">
-                      <Sparkles className="w-5 h-5 text-white" />
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center shadow-md ring-1 ring-blue-200">
+                      <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                      </svg>
                     </div>
-                    <div className="bg-white px-5 py-4 rounded-2xl rounded-bl-md shadow-md border border-gray-100">
-                      <div className="flex gap-1.5">
+                    <div className="bg-white px-6 py-4.5 rounded-2xl rounded-bl-sm shadow-md border border-gray-200">
+                      <div className="flex gap-2">
                         {[0, 1, 2].map(i => (
                           <div key={i} className="w-2.5 h-2.5 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: `${i * 0.15}s`}} />
                         ))}
@@ -558,23 +629,56 @@ export default function ChatApp() {
               )}
 
               {isTranscribing && (
-                <div className="flex justify-center mb-5 animate-slide-up">
-                  <div className="bg-white shadow-md px-4 py-2.5 rounded-full flex items-center gap-2.5 border border-gray-200">
-                    <div className="flex gap-1">
+                <div className="flex justify-center mb-7 animate-slide-up">
+                  <div className="bg-white shadow-md px-5 py-3 rounded-full flex items-center gap-3 border border-gray-200">
+                    <div className="flex gap-1.5">
                       {[0, 1, 2].map(i => (
-                        <div key={i} className="w-1 h-4 bg-blue-600 rounded-full animate-sound-wave" style={{animationDelay: `${i * 0.1}s`}} />
+                        <div key={i} className="w-1.5 h-5 bg-blue-600 rounded-full animate-sound-wave" style={{animationDelay: `${i * 0.1}s`}} />
                       ))}
                     </div>
-                    <span className="text-gray-700 text-sm font-medium">Processing audio...</span>
+                    <span className="text-gray-700 text-sm font-semibold">Processing audio...</span>
                   </div>
                 </div>
               )}
 
               {isSpeaking && (
-                <div className="flex justify-center mb-5 animate-slide-up">
-                  <div className="bg-blue-50 shadow-md px-4 py-2.5 rounded-full flex items-center gap-2.5 border border-blue-200">
-                    <Volume className="w-4 h-4 text-blue-600 animate-pulse" />
-                    <span className="text-blue-700 text-sm font-medium">Speaking in {detectedUserLanguage.toUpperCase()}</span>
+                <div className="flex justify-center mb-7 animate-slide-up">
+                  <div className="relative flex items-center justify-center">
+                    {/* Animated background circles */}
+                    <div className="absolute w-32 h-32 bg-blue-100 rounded-full animate-pulse opacity-50"></div>
+                    <div className="absolute w-24 h-24 bg-blue-200 rounded-full animate-pulse opacity-40" style={{animationDelay: '0.2s'}}></div>
+
+                    {/* Center stop button with speaker icon */}
+                    <button
+                      onClick={() => {
+                        if (currentAudioRef.current) {
+                          currentAudioRef.current.pause();
+                          currentAudioRef.current = null;
+                        }
+                        setIsSpeaking(false);
+                        setPlayingMessageId(null);
+                      }}
+                      className="relative z-10 w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white flex items-center justify-center shadow-lg hover:shadow-xl transition-all active:scale-95"
+                      title="Stop audio playback"
+                    >
+                      <svg className="w-10 h-10" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                      </svg>
+                    </button>
+
+                    {/* Language label above */}
+                    <div className="absolute top-0 transform -translate-y-12 whitespace-nowrap">
+                      <span className="text-blue-700 text-sm font-semibold bg-white px-4 py-2 rounded-full shadow-md border border-blue-200">
+                        🔊 Speaking in {detectedUserLanguage.toUpperCase()}
+                      </span>
+                    </div>
+
+                    {/* Stop label below */}
+                    <div className="absolute bottom-0 transform translate-y-12 whitespace-nowrap">
+                      <span className="text-red-600 text-xs font-bold animate-bounce">
+                        TAP TO STOP
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -586,8 +690,8 @@ export default function ChatApp() {
       </main>
 
       {error && (
-        <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 mb-3 animate-slide-up">
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 shadow-sm">
+        <div className="relative z-10 w-full px-4 sm:px-6 lg:px-8 mb-4 animate-slide-up">
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex items-start gap-4 shadow-md">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-red-800 text-sm font-medium">{error}</p>
@@ -605,17 +709,17 @@ export default function ChatApp() {
         </div>
       )}
 
-      <footer className="relative z-10 bg-white/80 backdrop-blur-xl border-t border-gray-200/50 shadow-lg">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4">
+      <footer className="relative z-10 bg-white border-t border-gray-200 shadow-lg">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
           {isListening && (
-            <div className="mb-4 bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center justify-between shadow-md animate-slide-up">
+            <div className="mb-5 bg-red-50 border border-red-200 rounded-2xl p-5 flex items-center justify-between shadow-md animate-slide-up">
               <div className="flex items-center gap-3">
                 <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-lg shadow-red-500/50" />
                 <span className="text-red-700 font-semibold text-sm sm:text-base">
                   Recording {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
                 </span>
               </div>
-              <div className="flex gap-1 items-end h-6">
+              <div className="flex gap-1.5 items-end h-6">
                 {[...Array(8)].map((_, i) => (
                   <div
                     key={i}
@@ -631,15 +735,15 @@ export default function ChatApp() {
           )}
 
           <div className="relative">
-            <div className="flex items-center gap-2 bg-white rounded-full shadow-lg border border-gray-200/50 p-2 hover:shadow-xl transition-shadow">
+            <div className="flex items-center gap-3 bg-white rounded-2xl shadow-lg border border-gray-300 p-3 hover:shadow-xl transition-shadow focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-0">
               <input
                 type="text"
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyPress={e => e.key === 'Enter' && !isListening && !isTranscribing && !isLoading && sendMessage()}
-                placeholder="Message TGNPDCL Assistant..."
+                placeholder="Message AI Assistant..."
                 disabled={isListening || isTranscribing || isInitializing}
-                className="flex-1 bg-transparent border-0 outline-none px-4 py-3 text-gray-900 placeholder-gray-500 text-[15px] disabled:opacity-50"
+                className="flex-1 bg-transparent border-0 outline-none px-5 py-4 text-gray-900 placeholder-gray-500 text[15px] disabled:opacity-50 font-medium"
               />
 
               <button
@@ -649,10 +753,10 @@ export default function ChatApp() {
                 onTouchStart={(e) => { e.preventDefault(); startRecording(); }}
                 onTouchEnd={(e) => { e.preventDefault(); stopRecording(); }}
                 disabled={isLoading || isTranscribing || isInitializing}
-                className={`shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                className={`shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all font-semibold ${
                   isListening
-                    ? 'bg-red-500 hover:bg-red-600 animate-pulse'
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg animate-pulse'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700 shadow-sm'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
                 title="Hold to record voice message"
                 aria-label="Record voice message"
@@ -663,9 +767,9 @@ export default function ChatApp() {
               <button
                 onClick={() => sendMessage()}
                 disabled={!input.trim() || isLoading || isListening || isTranscribing || isInitializing}
-                className={`shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-all ${
+                className={`shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all font-semibold ${
                   input.trim() && !isLoading && !isListening && !isTranscribing && !isInitializing
-                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:scale-105 active:scale-95'
                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 }`}
                 title="Send message"
@@ -679,106 +783,120 @@ export default function ChatApp() {
         </div>
       </footer>
 
-      <style>{`
-        html, body, #root {
-          height: 100%;
-          margin: 0;
-          padding: 0;
-        }
-
-        @keyframes slide-up {
-          from {
-            opacity: 0;
-            transform: translateY(16px);
+        <style>{`
+          html, body, #root {
+            height: 100%;
+            margin: 0;
+            padding: 0;
           }
-          to {
-            opacity: 1;
-            transform: translateY(0);
+
+          @keyframes slide-up {
+            from {
+              opacity: 0;
+              transform: translateY(16px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
           }
-        }
 
-        @keyframes float {
-          0%, 100% {
-            transform: translate(0, 0) scale(1);
+          @keyframes fade-in {
+            from {
+              opacity: 0;
+            }
+            to {
+              opacity: 1;
+            }
           }
-          33% {
-            transform: translate(30px, -30px) scale(1.1);
+
+          @keyframes float {
+            0%, 100% {
+              transform: translate(0, 0) scale(1);
+            }
+            33% {
+              transform: translate(30px, -30px) scale(1.1);
+            }
+            66% {
+              transform: translate(-20px, 20px) scale(0.9);
+            }
           }
-          66% {
-            transform: translate(-20px, 20px) scale(0.9);
+
+          @keyframes float-delayed {
+            0%, 100% {
+              transform: translate(0, 0) scale(1);
+            }
+            33% {
+              transform: translate(-30px, 30px) scale(1.1);
+            }
+            66% {
+              transform: translate(20px, -20px) scale(0.9);
+            }
           }
-        }
 
-        @keyframes float-delayed {
-          0%, 100% {
-            transform: translate(0, 0) scale(1);
+          @keyframes sound-wave {
+            0%, 100% {
+              height: 0.5rem;
+              opacity: 0.5;
+            }
+            50% {
+              height: 1.5rem;
+              opacity: 1;
+            }
           }
-          33% {
-            transform: translate(-30px, 30px) scale(1.1);
+
+          @keyframes pulse-slow {
+            0%, 100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0.5;
+            }
           }
-          66% {
-            transform: translate(20px, -20px) scale(0.9);
+
+          .animate-slide-up {
+            animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
           }
-        }
 
-        @keyframes sound-wave {
-          0%, 100% {
-            height: 0.5rem;
-            opacity: 0.5;
+          .animate-fade-in {
+            animation: fade-in 1s ease-in-out;
           }
-          50% {
-            height: 1.5rem;
-            opacity: 1;
+
+          .animate-float {
+            animation: float 20s ease-in-out infinite;
           }
-        }
 
-        @keyframes pulse-slow {
-          0%, 100% {
-            opacity: 1;
+          .animate-float-delayed {
+            animation: float-delayed 25s ease-in-out infinite;
           }
-          50% {
-            opacity: 0.5;
+
+          .animate-sound-wave {
+            animation: sound-wave 0.8s ease-in-out infinite;
           }
-        }
 
-        .animate-slide-up {
-          animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        }
+          .animate-pulse-slow {
+            animation: pulse-slow 2s ease-in-out infinite;
+          }
 
-        .animate-float {
-          animation: float 20s ease-in-out infinite;
-        }
+          /* Smooth scrollbar */
+          main::-webkit-scrollbar {
+            width: 8px;
+          }
 
-        .animate-float-delayed {
-          animation: float-delayed 25s ease-in-out infinite;
-        }
+          main::-webkit-scrollbar-track {
+            background: transparent;
+          }
 
-        .animate-sound-wave {
-          animation: sound-wave 0.8s ease-in-out infinite;
-        }
+          main::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+          }
 
-        .animate-pulse-slow {
-          animation: pulse-slow 2s ease-in-out infinite;
-        }
-
-        /* Smooth scrollbar */
-        main::-webkit-scrollbar {
-          width: 8px;
-        }
-
-        main::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        main::-webkit-scrollbar-thumb {
-          background: rgba(0, 0, 0, 0.2);
-          border-radius: 4px;
-        }
-
-        main::-webkit-scrollbar-thumb:hover {
-          background: rgba(0, 0, 0, 0.3);
-        }
-      `}</style>
+          main::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.3);
+          }
+        `}</style>
+      </div>
     </div>
   );
 }

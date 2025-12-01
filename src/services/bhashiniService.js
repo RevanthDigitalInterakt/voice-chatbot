@@ -3,35 +3,64 @@ import axios from "axios";
 const PROXY_URL = import.meta.env.VITE_PROXY_URL || 'http://localhost:3000';
 
 /**
- * Integrated pipeline: Audio Language Detection + ASR + Translation
+ * Two-step optimized pipeline: First detect language, then transcribe with ASR
+ * This is more efficient as it avoids redundant language detection
  */
 export const sendAudioBhashiniPipeline = async (audioBase64) => {
   try {
-    console.log('🎤 Starting integrated Bhashini pipeline (ALD + ASR + NMT)...');
-    
-    const response = await axios.post(
-      `${PROXY_URL}/api/bhashini-pipeline`,
+    console.log('🎤 Starting optimized Bhashini pipeline (ALD → ASR + NMT)...');
+
+    // STEP 1: Detect language
+    console.log('   🔍 STEP 1: Detecting language...');
+    const aldResponse = await axios.post(
+      `${PROXY_URL}/api/detect-language`,
       { audioBase64 },
       {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 45000,
+        timeout: 25000,
       }
     );
 
-    if (!response.data.success) {
-      throw new Error(response.data.error || 'Pipeline processing failed');
+    if (!aldResponse.data.success) {
+      throw new Error(aldResponse.data.message || 'Language detection failed');
     }
 
-    console.log('✅ Bhashini pipeline complete');
-    console.log('   Detected Language:', response.data.detectedLanguage);
-   
+    const detectedLanguage = aldResponse.data.detectedLanguage;
+    const confidence = aldResponse.data.confidence;
+    const detectedScript = aldResponse.data.detectedScript;
+    const aldTime = aldResponse.data.processingTime;
+
+    console.log(`   ✅ Detected: ${detectedLanguage} (${(confidence * 100).toFixed(2)}%) [${aldTime}ms]`);
+
+    // STEP 2: Transcribe with detected language
+    console.log('   🎤 STEP 2: Transcribing with detected language...');
+    const asrResponse = await axios.post(
+      `${PROXY_URL}/api/transcribe-with-language`,
+      {
+        audioBase64,
+        detectedLanguage
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 35000,
+      }
+    );
+
+    if (!asrResponse.data.success) {
+      throw new Error(asrResponse.data.message || 'Transcription failed');
+    }
+
+    const asrTime = asrResponse.data.processingTime;
+    console.log(`   ✅ Transcription complete [${asrTime}ms]`);
+    console.log(`   📊 Total time: ${aldTime + asrTime}ms`);
+
     return {
-      detectedLanguage: response.data.detectedLanguage,
-      detectedScript: response.data.detectedScript,
-      confidence: response.data.confidence,
-      originalText: response.data.originalText,
-      translatedText: response.data.translatedText,
-      languageName: getLanguageName(response.data.detectedLanguage)
+      detectedLanguage: asrResponse.data.detectedLanguage,
+      detectedScript: detectedScript,
+      confidence: confidence,
+      originalText: asrResponse.data.originalText,
+      translatedText: asrResponse.data.translatedText,
+      languageName: getLanguageName(asrResponse.data.detectedLanguage)
     };
 
   } catch (error) {
